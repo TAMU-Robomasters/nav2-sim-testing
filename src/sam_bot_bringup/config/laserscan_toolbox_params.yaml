@@ -1,0 +1,51 @@
+laserscan_toolbox_node:
+  ros__parameters:
+    #common
+    rate: 20.0 #hz
+    topic_out: "scan" 
+    new_frame: "base_link"
+    odom_topic: "/demo/odom" 
+    odom_delay_limit: 3.0 
+    extrapolate_odometry: false 
+
+    #debugging
+    debug: false
+    show_ranges: false
+    show_odometry_detail: false
+
+    #output settings
+    angle_min: 0.0 
+    angle_max: 6.283185307
+    angle_increment: 0.017453293 # 1 degree precision
+    range_min: 0.1 
+    range_max: 12.0 
+    extrapolate_scan: false 
+
+    #advanced output settings
+    auto_set: true 
+    time_increment: 0.0 
+    scan_time: 0.0 
+
+    #sources
+    sources: front rear
+
+    front:
+      topic: "/scan_front"
+      timeout: 0.1
+
+      start_angle: 3.4033920413889427 # 195 degrees
+      end_angle: 2.8797932657906435 # 165 degrees
+      scan_angle_offset: 0.0
+      range_min: 0.0
+      range_max: 12.0
+      persistence: false
+
+    rear:
+      topic: "/scan_rear"
+      timeout: 0.1
+      start_angle: 6.021385919380437
+      end_angle: 0.2617993877991494
+      scan_angle_offset: 0.0
+      range_min: 0.0
+      range_max: 12.0
+      persistence: false
