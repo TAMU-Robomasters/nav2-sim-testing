@@ -1,0 +1,50 @@
+laserscan_toolbox_node:
+  ros__parameters:
+    # common
+    rate: 10.0
+    topic_out: "/scan"
+    new_frame: "base_link"
+    odom_topic: "/odom"
+    odom_delay_limit: 3.0
+    extrapolate_odometry: false
+
+    # debugging
+    debug: false
+    show_ranges: false
+    show_odometry_detail: false
+
+    # output settings
+    angle_min: 0.0
+    angle_max: 6.283185307
+    angle_increment: 0.017453293
+    range_min: 0.3
+    range_max: 15.0
+    extrapolate_scan: false
+
+    # advanced output settings
+    auto_set: true
+    time_increment: 0.0
+    scan_time: 0.0
+
+    # input sources from dual ldlidar
+    sources: left right
+
+    left:
+      topic: "/lidar_left/ldlidar_node/scan"
+      timeout: 0.1
+      start_angle: 0.0
+      end_angle: 6.283185307
+      scan_angle_offset: 0.0
+      range_min: 0.3
+      range_max: 15.0
+      persistence: false
+
+    right:
+      topic: "/lidar_right/ldlidar_node/scan"
+      timeout: 0.1
+      start_angle: 0.0
+      end_angle: 6.283185307
+      scan_angle_offset: 0.0
+      range_min: 0.3
+      range_max: 15.0
+      persistence: false

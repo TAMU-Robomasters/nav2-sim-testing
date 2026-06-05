@@ -1,3 +1,6 @@
 [submodule "src/multi-laserscan-toolbox-ros2"]
 	path = src/multi-laserscan-toolbox-ros2
 	url = https://github.com/Noceo200/multi-laserscan-toolbox-ros2.git
+[submodule "src/dual-ldlidar"]
+	path = src/dual-ldlidar
+	url = git@github.com:TAMU-Robomasters/dual-ldlidar.git

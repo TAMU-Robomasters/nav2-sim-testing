@@ -1,0 +1,7 @@
+# Persistent symlinks for LD19 LiDARs on Jetson Orin
+# Both units report serial "0001", so we match by physical USB port instead.
+# Left LiDAR is always plugged into port 1-4.1, right into 1-4.2.
+# Install: sudo cp 99-ldlidar.rules /etc/udev/rules.d/ && sudo udevadm control --reload-rules && sudo udevadm trigger
+
+SUBSYSTEM=="tty", KERNELS=="1-4.1", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", SYMLINK+="lidar_left",  MODE="0666"
+SUBSYSTEM=="tty", KERNELS=="1-4.2", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", SYMLINK+="lidar_right", MODE="0666"
