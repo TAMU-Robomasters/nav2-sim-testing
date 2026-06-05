@@ -7,23 +7,23 @@ amcl:
       y: 0.0
       z: 0.0
       yaw: 0.0
-    alpha1: 0.2
-    alpha2: 0.2
-    alpha3: 0.2
-    alpha4: 0.2
-    alpha5: 0.2
+    alpha1: 0.5
+    alpha2: 0.5
+    alpha3: 0.5
+    alpha4: 0.5
+    alpha5: 0.5
     base_frame_id: "base_link"
     beam_skip_distance: 0.5
     beam_skip_error_threshold: 0.9
     beam_skip_threshold: 0.3
     do_beamskip: false
     global_frame_id: "map"
-    lambda_short: 0.1
-    laser_likelihood_max_dist: 2.0
-    laser_max_range: 100.0
-    laser_min_range: -1.0
+    lambda_short: 0.1        # beam model only — ignored by likelihood_field
+    laser_likelihood_max_dist: 2.0  # likelihood_field: max obstacle lookup distance in the precomputed map
+    laser_max_range: 100.0   # likelihood_field: beams beyond this range are discarded
+    laser_min_range: -1.0    # likelihood_field: beams below this range are discarded (-1 = no min)
     laser_model_type: "likelihood_field"
-    max_beams: 60
+    max_beams: 360            # likelihood_field: beams subsampled per scan update
     max_particles: 10000
     min_particles: 1000
     odom_frame_id: "odom"
@@ -34,15 +34,15 @@ amcl:
     resample_interval: 1
     robot_model_type: "differential"
     save_pose_rate: 0.5
-    sigma_hit: 0.2
+    sigma_hit: 0.2           # likelihood_field: std dev of Gaussian around expected obstacle distance
     tf_broadcast: true
     transform_tolerance: 1.0
     update_min_a: 0.2
     update_min_d: 0.25
-    z_hit: 0.5
-    z_max: 0.05
-    z_rand: 0.5
-    z_short: 0.05
+    z_hit: 0.7               # likelihood_field: weight on Gaussian hit component (z_hit + z_rand must = 1.0)
+    z_max: 0.05              # beam model only — ignored by likelihood_field
+    z_rand: 0.3              # likelihood_field: weight on uniform random component
+    z_short: 0.05            # beam model only — ignored by likelihood_field
     scan_topic: scan
 
 amcl_map_client:
