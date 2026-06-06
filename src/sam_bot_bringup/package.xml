@@ -13,6 +13,10 @@
   <exec_depend>slam_toolbox</exec_depend>
   <exec_depend>multi-laserscan-toolbox-ros2</exec_depend>
   <exec_depend>sam_bot_description</exec_depend>
+  <!-- square_patrol.py -->
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav2_simple_commander</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

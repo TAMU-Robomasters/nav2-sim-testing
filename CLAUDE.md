@@ -121,6 +121,26 @@ This is the main launch file for autonomous navigation on the real robot and the
 
 See [`README.md`](README.md) "Real-hardware Nav2" for the full tuning table (DWB limits, AMCL alphas, dynamic-obstacle upgrade path via `nav2_collision_monitor`/MPPI).
 
+### Waypoint patrol script (`square_patrol.py`)
+
+A standalone client that drives the robot in a repeating loop of waypoints (a square by default) using the `nav2_simple_commander` `BasicNavigator` API. It does **not** launch anything — start the nav stack first, then run the script in a second terminal:
+
+```bash
+# terminal 1: bring up the full stack
+ros2 launch sam_bot_bringup real_lidar_navigate.launch.py use_rviz:=true
+# terminal 2: run the patrol (blocks at waitUntilNav2Active until the stack is ACTIVE)
+ros2 run sam_bot_bringup square_patrol.py
+```
+
+- File: [`scripts/square_patrol.py`](src/sam_bot_bringup/scripts/square_patrol.py). Installed via `install(PROGRAMS … DESTINATION lib/${PROJECT_NAME})` in [`CMakeLists.txt`](src/sam_bot_bringup/CMakeLists.txt) — that `lib/` dir (not `share/`) is what `ros2 run` searches. Edit `SQUARE_CORNERS` at the top to set real map coordinates.
+- **It calls `setInitialPose((0,0,0))` to match `amcl`'s `set_initial_pose: true` in the YAML.** `waitUntilNav2Active(localizer='amcl')` internally republishes the navigator's initial pose to `/initialpose` and blocks until it sees `/amcl_pose`; setting it to the same (0,0,0) the YAML uses keeps the two from fighting (and avoids an empty-`frame_id` pose that AMCL would reject, hanging the wait forever).
+- Waypoint **orientation is irrelevant** (holonomic robot, `yaw_goal_tolerance > π`) — poses use identity quaternions.
+
+**Gotchas (don't reintroduce):**
+- **New scripts need `chmod +x` on the source file.** With `--symlink-install`, the installed entry is a symlink back to `src/…/scripts/`, so `ros2 run` honors the *source* file's mode. A non-executable script gives `No executable found` even though it built fine. The mode is tracked by git, so it's a one-time fix. (`ros2 pkg executables sam_bot_bringup` confirms it's discoverable.)
+- **Adding the script is a *new* file**, so `colcon build --packages-select sam_bot_bringup` is required once before the first `ros2 run` (the `--symlink-install` rebuild caveat at the top of this file).
+- For Python-only tooling that grows beyond one script, prefer a separate `ament_python` package over piling `install(PROGRAMS …)` lines into this `ament_cmake` bringup package.
+
 ## Coordinate Frame Convention
 
 The embedded system uses a **different axis convention** than ROS:

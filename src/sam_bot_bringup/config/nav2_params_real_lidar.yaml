@@ -111,12 +111,12 @@ controller_server:
       plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: True
       # Translational limits (both axes — robot can strafe). Max 0.5 m/s.
-      min_vel_x: -0.5
-      max_vel_x: 0.5
-      min_vel_y: -0.5
-      max_vel_y: 0.5
+      min_vel_x: -4.0
+      max_vel_x: 4.0
+      min_vel_y: -4.0
+      max_vel_y: 4.0
       min_speed_xy: 0.0
-      max_speed_xy: 0.5
+      max_speed_xy: 4.0
       # No rotation: omega is discarded downstream, so DWB evaluates pure
       # translation trajectories only.
       min_vel_theta: 0.0
@@ -158,7 +158,7 @@ local_costmap:
       width: 4
       height: 4
       resolution: 0.05
-      robot_radius: 0.303
+      robot_radius: 0.35
       plugins: ["obstacle_layer", "inflation_layer"]
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
