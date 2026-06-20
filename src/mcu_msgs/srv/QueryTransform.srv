@@ -1,0 +1,9 @@
+# Request: how far in the past the frame was captured (the MCU does a buffered
+# time-lookup keyed on this delay). Mirrors the wire type (uint8 ms).
+uint8 frame_delay_ms
+---
+# Response: the camera-to-ballistic transform. matrix is the 4x4 row-major.
+bool success
+float32 yaw
+float32 pitch
+float32[16] matrix

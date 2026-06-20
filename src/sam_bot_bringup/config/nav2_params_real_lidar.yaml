@@ -84,7 +84,7 @@ lifecycle_manager_localization:
 controller_server:
   ros__parameters:
     use_sim_time: false
-    controller_frequency: 20.0
+    controller_frequency: 80.0
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.001
     min_theta_velocity_threshold: 0.001
@@ -111,12 +111,12 @@ controller_server:
       plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: True
       # Translational limits (both axes — robot can strafe). Max 0.5 m/s.
-      min_vel_x: -4.0
-      max_vel_x: 4.0
-      min_vel_y: -4.0
-      max_vel_y: 4.0
+      min_vel_x: -2.0
+      max_vel_x: 2.0
+      min_vel_y: -2.0
+      max_vel_y: 2.0
       min_speed_xy: 0.0
-      max_speed_xy: 4.0
+      max_speed_xy: 2.0
       # No rotation: omega is discarded downstream, so DWB evaluates pure
       # translation trajectories only.
       min_vel_theta: 0.0
@@ -142,7 +142,7 @@ controller_server:
       # they fight the external yaw controller. Keep obstacle + path/goal
       # distance + oscillation for translation guidance.
       critics: ["BaseObstacle", "PathDist", "GoalDist", "Oscillation"]
-      BaseObstacle.scale: 0.02
+      BaseObstacle.scale: 0.5
       PathDist.scale: 32.0
       GoalDist.scale: 24.0
 
@@ -176,8 +176,8 @@ local_costmap:
           obstacle_min_range: 0.0
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.55
+        cost_scaling_factor: 1.0
+        inflation_radius: 0.7
       always_send_full_costmap: True
 
 global_costmap:
@@ -189,7 +189,7 @@ global_costmap:
       global_frame: map
       robot_base_frame: base_link
       resolution: 0.05
-      robot_radius: 0.303
+      robot_radius: 0.35
       track_unknown_space: true
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
       static_layer:

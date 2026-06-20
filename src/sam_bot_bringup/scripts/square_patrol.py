@@ -28,10 +28,10 @@ from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
 # Square corners in the map frame (metres), visited in order. The robot starts
 # at (0, 0) — matching amcl's set_initial_pose in nav2_params_real_lidar.yaml.
 SQUARE_CORNERS = [
-    (0.601, 1.63),
-    (0.603, -1.79),
-    (3.98, -1.29),
-    (3.85, 1.6),
+    (0.786, 1.47),
+    (3.73, 1.44),
+    # (3.98, -1.29),
+    # (3.85, 1.6),
 ]
 
 

@@ -48,9 +48,11 @@ Loads `src/sam_bot_bringup/maps/web_save.yaml` by default. Startup order: lidars
 
 **Real hardware — full Nav2 navigation (localization + planner + controller + behaviors + BT)**
 ```bash
-ros2 launch sam_bot_bringup real_lidar_navigate.launch.py [use_rviz:=true] [use_uart_odom:=true]
+ros2 launch sam_bot_bringup real_lidar_navigate.launch.py [use_rviz:=true] [use_uart_odom:=true] [enable_mcu_bridge:=true]
 ```
 This is the primary autonomous-navigation entry point — see the dedicated section below.
+Pass `enable_mcu_bridge:=true` to also serve the AutoX auto-aim app over the same
+UART (transform query + firing solution) — see "MCU bridge for AutoX" below.
 
 **LiDARs only (debug)**
 ```bash
@@ -87,7 +89,8 @@ LD19 right (/dev/lidar_right) ─► /lidar_right/ldlidar_node/scan ─┤
 
 | Package | Role |
 |---|---|
-| `uart_odom` | Polls embedded MCU at 100 Hz via UART; publishes `/odom` + `odom→base_link` TF |
+| `uart_odom` | Polls embedded MCU at 100 Hz via UART; publishes `/odom` + `odom→base_link` TF. With `enable_mcu_bridge:=true` it also owns the AutoX MCU bridge (transform service + firing-solution sink) on the same port |
+| `mcu_msgs` | Interface package for the AutoX bridge: `srv/QueryTransform`, `msg/FiringSolution` |
 | `dual-ldlidar` | Third-party driver for LD19 LiDARs; runs as lifecycle-managed component nodes |
 | `multi-laserscan-toolbox-ros2` | Merges two `LaserScan` topics into one `/scan` in `base_link` frame |
 | `sam_bot_bringup` | All launch files, nav2/slam/amcl/laserscan configs, and the saved map |
@@ -157,11 +160,36 @@ A static TF `embedded_odom → odom` (−90° yaw) is also broadcast for any nod
 
 ## Serial Protocol (MCU ↔ uart_odom)
 
-Both structs are `__attribute__((packed))`:
+Odometry structs are `__attribute__((packed))`:
 - **Query** (host → MCU): `{ magic: 'a', messageType: 'q' }` — 2 bytes
 - **Response** (MCU → host): `{ magic, x: float32, y: float32, theta: float32 }` — 13 bytes
 
-Serial port: `/dev/ttyTHS1`, 115200 baud. Timeout per read: 20 ms.
+Serial port: `/dev/ttyTHS1`, **460800 baud** (raised from 115200 so the 69-byte
+transform reply clocks in at ~1.5 ms; the MCU firmware must match). Timeout per
+read: 20 ms.
+
+## MCU bridge for AutoX (`enable_mcu_bridge`)
+
+Only **one** process may own `/dev/ttyTHS1`, but on the sentry both nav (odometry +
+`/cmd_vel`) and the AutoX auto-aim app need the MCU at the same time. So when
+`enable_mcu_bridge:=true`, `uart_odom_node` is the **sole serial owner** and also
+serves AutoX's MCU traffic over ROS:
+
+- **`/mcu/query_transform`** (`mcu_msgs/srv/QueryTransform`) — AutoX requests the
+  camera→ballistic transform (`frame_delay_ms` → `success, yaw, pitch, matrix[16]`).
+  The service callback does the serial round-trip **synchronously** (writes a 3-byte
+  `TransformQuery` `messageType 't'`, reads the 69-byte `EmbeddedTransformationMessage`).
+- **`/mcu/firing_solution`** (`mcu_msgs/msg/FiringSolution`) — fire-and-forget sink;
+  the callback writes a 12-byte `JetsonMessage` (`messageType 'd'`) to the MCU.
+
+All callbacks run in the node's default `MutuallyExclusiveCallbackGroup` on the
+single-threaded executor, so the synchronous transform service can never overlap the
+100 Hz odom poll or `/cmd_vel` writes on the one serial line — no lock needed. The
+transform query (`'t'`) and odom query (`'q'`) coexist on the wire; the MCU dispatches
+by `messageType`. The flag is **off by default**, so odom-only mode is unchanged.
+
+The matching `MCU=ROS` consumer lives in AutoX (`src/drivers/mcu.py` `RosBackend`).
+Run order and the full picture are in the AutoX repo's `README.md`.
 
 ## LiDAR USB Device Naming
 

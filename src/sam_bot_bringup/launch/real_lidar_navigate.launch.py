@@ -36,6 +36,7 @@ def generate_launch_description():
     # ---------- Launch arguments ----------
     use_rviz = LaunchConfiguration("use_rviz")
     use_uart_odom = LaunchConfiguration("use_uart_odom")
+    enable_mcu_bridge = LaunchConfiguration("enable_mcu_bridge")
     rviz_config = LaunchConfiguration("rviz_config")
 
     declare_use_rviz = DeclareLaunchArgument(
@@ -54,6 +55,12 @@ def generate_launch_description():
         default_value="true",
         description="Launch UART node (odometry + /cmd_vel bridge) if true",
     )
+    declare_enable_mcu_bridge = DeclareLaunchArgument(
+        "enable_mcu_bridge",
+        default_value="false",
+        description="Have the UART node also serve AutoX MCU traffic "
+        "(transform query + firing solution) over the same serial port",
+    )
 
     # ---------- Config / map paths ----------
     # Resolved to plain strings (mirrors real_lidar_amcl.launch.py). Passing
@@ -63,7 +70,7 @@ def generate_launch_description():
     nav2_params_path = str(
         Path(bringup_share) / "config" / "nav2_params_real_lidar.yaml"
     )
-    map_yaml_path = str(Path(bringup_share) / "maps" / "web_good_save.yaml")
+    map_yaml_path = str(Path(bringup_share) / "maps" / "web_no_obstacles.yaml")
     laserscan_params_path = str(
         Path(bringup_share) / "config" / "laserscan_toolbox_real_lidar_params.yaml"
     )
@@ -90,6 +97,7 @@ def generate_launch_description():
                 / "uart_odom.launch.py"
             )
         ),
+        launch_arguments={"enable_mcu_bridge": enable_mcu_bridge}.items(),
         condition=IfCondition(use_uart_odom),
     )
 
@@ -215,6 +223,7 @@ def generate_launch_description():
             declare_use_rviz,
             declare_rviz_config,
             declare_use_uart_odom,
+            declare_enable_mcu_bridge,
             # 0. LDLidar dual + lifecycle manager (immediate)
             ldlidar_dual_with_mgr_launch,
             # 1. UART odom + cmd_vel bridge (immediate, if enabled)

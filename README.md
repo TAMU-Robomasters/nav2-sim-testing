@@ -75,6 +75,22 @@ Startup order: lidars + UART node (0s) → laserscan merger (3s) → map_server 
 
 All navigation parameters live in [`nav2_params_real_lidar.yaml`](src/sam_bot_bringup/config/nav2_params_real_lidar.yaml) (the same file used by the AMCL-only launch — the navigation sections are simply ignored there).
 
+### Waypoint patrol script
+
+[`square_patrol.py`](src/sam_bot_bringup/scripts/square_patrol.py) drives the robot in a repeating loop of waypoints (a square by default) using the `nav2_simple_commander` `BasicNavigator` API. It does **not** launch anything — bring up the nav stack first, then run the script in a second terminal:
+
+```bash
+# terminal 1: bring up the full stack
+ros2 launch sam_bot_bringup real_lidar_navigate.launch.py use_rviz:=true
+
+# terminal 2: run the patrol (blocks at waitUntilNav2Active until the stack is ACTIVE)
+ros2 run sam_bot_bringup square_patrol.py
+```
+
+Edit `SQUARE_CORNERS` at the top of the script to set the real map coordinates. Waypoint orientation is irrelevant (holonomic robot, `yaw_goal_tolerance > π`), so the poses use identity quaternions.
+
+> **First-run setup:** the script is installed via `install(PROGRAMS …)` in [`CMakeLists.txt`](src/sam_bot_bringup/CMakeLists.txt), so adding it is a *new* file — run `colcon build --symlink-install --packages-select sam_bot_bringup` once before the first `ros2 run`. The source file must also be executable (`chmod +x`); with `--symlink-install` the installed entry honors the source file's mode, and a non-executable script gives `No executable found` even though it built fine.
+
 ### How motion reaches the robot
 
 `controller_server` (DWB) publishes `geometry_msgs/Twist` on `/cmd_vel`. The **`uart_odom_node`** subscribes to `/cmd_vel` and forwards it to the MCU over the *same* serial port it reads odometry from (`/dev/ttyTHS1`) — a separate node can't be used because the port is opened exclusively. base_link velocities are converted to the embedded frame (`x=right, y=forward`):

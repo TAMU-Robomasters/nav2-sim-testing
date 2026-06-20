@@ -13,7 +13,7 @@ def generate_launch_description():
 
     declare_baudrate = DeclareLaunchArgument(
         'baudrate',
-        default_value='115200',
+        default_value='460800',
         description='Serial port baudrate'
     )
 
@@ -41,6 +41,12 @@ def generate_launch_description():
         description='Node update rate in Hz'
     )
 
+    declare_enable_mcu_bridge = DeclareLaunchArgument(
+        'enable_mcu_bridge',
+        default_value='false',
+        description='Also serve AutoX MCU traffic (transform query + firing solution) over the same UART'
+    )
+
     uart_odom_node = ExecuteProcess(
         cmd=[
             'uart_odom_node',
@@ -51,6 +57,7 @@ def generate_launch_description():
             '-p', ['base_frame:=', LaunchConfiguration('base_frame')],
             '-p', ['publish_tf:=', LaunchConfiguration('publish_tf')],
             '-p', ['update_rate:=', LaunchConfiguration('update_rate')],
+            '-p', ['enable_mcu_bridge:=', LaunchConfiguration('enable_mcu_bridge')],
         ],
         output='screen',
     )
@@ -62,5 +69,6 @@ def generate_launch_description():
         declare_base_frame,
         declare_publish_tf,
         declare_update_rate,
+        declare_enable_mcu_bridge,
         uart_odom_node,
     ])
