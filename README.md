@@ -91,6 +91,17 @@ Edit `SQUARE_CORNERS` at the top of the script to set the real map coordinates. 
 
 > **First-run setup:** the script is installed via `install(PROGRAMS …)` in [`CMakeLists.txt`](src/sam_bot_bringup/CMakeLists.txt), so adding it is a *new* file — run `colcon build --symlink-install --packages-select sam_bot_bringup` once before the first `ros2 run`. The source file must also be executable (`chmod +x`); with `--symlink-install` the installed entry honors the source file's mode, and a non-executable script gives `No executable found` even though it built fine.
 
+### Unattended autoboot (`autoboot.sh` / `autoboot_disable.sh`)
+
+For hands-off startup (rc.local, systemd, or a single command), two repo-root scripts wrap the two-terminal flow above:
+
+```bash
+./autoboot.sh          # launch stack detached → wait until ACTIVE → start patrol
+./autoboot_disable.sh  # stop patrol + stack + any leftover nav2/lidar/uart procs
+```
+
+`autoboot.sh` runs the launch and the patrol **detached in their own process groups** (they survive the terminal), waits for `map_server / amcl / controller_server / planner_server / behavior_server / bt_navigator` to all reach `active` before patrolling, and writes PGIDs + logs to `/tmp/sentry_autoboot/`. Options are env vars: `USE_RVIZ` (default `false`), `USE_UART_ODOM` (`true`), `ENABLE_MCU_BRIDGE` (`false`), `ACTIVE_TIMEOUT` (`120`). `autoboot_disable.sh` stops both process groups (`SIGINT → SIGTERM → SIGKILL`) with a `pkill` fallback sweep. These are for unattended use; the two-terminal flow above is still better for interactive tuning.
+
 ### How motion reaches the robot
 
 `controller_server` (DWB) publishes `geometry_msgs/Twist` on `/cmd_vel`. The **`uart_odom_node`** subscribes to `/cmd_vel` and forwards it to the MCU over the *same* serial port it reads odometry from (`/dev/ttyTHS1`) — a separate node can't be used because the port is opened exclusively. base_link velocities are converted to the embedded frame (`x=right, y=forward`):

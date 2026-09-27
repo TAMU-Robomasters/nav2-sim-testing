@@ -48,11 +48,14 @@ Loads `src/sam_bot_bringup/maps/web_save.yaml` by default. Startup order: lidars
 
 **Real hardware — full Nav2 navigation (localization + planner + controller + behaviors + BT)**
 ```bash
-ros2 launch sam_bot_bringup real_lidar_navigate.launch.py [use_rviz:=true] [use_uart_odom:=true] [enable_mcu_bridge:=true]
+ros2 launch sam_bot_bringup real_lidar_navigate.launch.py [use_rviz:=true] [use_uart_odom:=true] [enable_mcu_bridge:=true] [map:=/abs/path.yaml] [use_keepout:=true]
 ```
 This is the primary autonomous-navigation entry point — see the dedicated section below.
 Pass `enable_mcu_bridge:=true` to also serve the AutoX auto-aim app over the same
 UART (transform query + firing solution) — see "MCU bridge for AutoX" below.
+Pass `map:=` to load a different map (default `maps/3v3_field.yaml`), and
+`use_keepout:=false` to run on a map that has **no** matching keepout mask — see
+"Configurable map / keepout toggle" below.
 
 **LiDARs only (debug)**
 ```bash
@@ -124,6 +127,22 @@ This is the main launch file for autonomous navigation on the real robot and the
 
 See [`README.md`](README.md) "Real-hardware Nav2" for the full tuning table (DWB limits, AMCL alphas, dynamic-obstacle upgrade path via `nav2_collision_monitor`/MPPI).
 
+#### Configurable map / keepout toggle
+
+`real_lidar_navigate.launch.py` takes two args for swapping maps:
+- **`map:=/abs/path.yaml`** — map served by `map_server` (default `maps/3v3_field.yaml`).
+- **`use_keepout:=false`** — run **without** the keepout-zone filter, for a map that has no matching keepout mask. Default `true` (today's behavior unchanged).
+
+Because these need *resolved* values (see the empty-`yaml_filename` gotcha above, and because starting/omitting the filter servers is a structural choice), the launch body is wrapped in an **`OpaqueFunction`** so `map` is a real string and `use_keepout` a real bool. What `use_keepout:=false` changes:
+- The two filter servers (`filter_mask_server`, `costmap_filter_info_server`) are **not** started.
+- `lifecycle_manager_localization`'s `node_names` is overridden to `['map_server', 'amcl']` (leaf-param dict layered after the YAML — same mechanism as `yaml_filename`). **This is the load-bearing part:** leaving the two filter servers in `node_names` while they aren't running stalls the whole localization bringup waiting to configure absent nodes.
+- [`config/keepout_off.yaml`](src/sam_bot_bringup/config/keepout_off.yaml) is layered onto `planner_server`, setting `keepout_filter: enabled: false`. The filter plugin is nested under `global_costmap.global_costmap.ros__parameters`, so it can't be reached with a per-node dict — hence the tiny second params file. It disables the plugin rather than blanking `filters: []` (an empty list trips rclcpp's array type inference).
+
+**Gotchas (don't reintroduce):**
+- **`keepout_off.yaml` is a *new* file under `config/`**, so `colcon build --symlink-install --packages-select sam_bot_bringup` is required once before `use_keepout:=false` works (the `--symlink-install` new-file caveat at the top of this file). Editing the existing launch/YAMLs takes effect live; the new file does not.
+- Keep `use_keepout` default `true` — the committed `3v3_field` map ships with a matching `keepout_mask`, so the default path must stay the keepout-on flow.
+- A new map's keepout mask (if any) must share the map's `origin` and `resolution` or the no-go zones land in the wrong place. A mask smaller than the map is fine — uncovered area is treated as free.
+
 ### Waypoint patrol script (`square_patrol.py`)
 
 A standalone client that drives the robot in a repeating loop of waypoints (a square by default) using the `nav2_simple_commander` `BasicNavigator` API. It does **not** launch anything — start the nav stack first, then run the script in a second terminal:
@@ -143,6 +162,55 @@ ros2 run sam_bot_bringup square_patrol.py
 - **New scripts need `chmod +x` on the source file.** With `--symlink-install`, the installed entry is a symlink back to `src/…/scripts/`, so `ros2 run` honors the *source* file's mode. A non-executable script gives `No executable found` even though it built fine. The mode is tracked by git, so it's a one-time fix. (`ros2 pkg executables sam_bot_bringup` confirms it's discoverable.)
 - **Adding the script is a *new* file**, so `colcon build --packages-select sam_bot_bringup` is required once before the first `ros2 run` (the `--symlink-install` rebuild caveat at the top of this file).
 - For Python-only tooling that grows beyond one script, prefer a separate `ament_python` package over piling `install(PROGRAMS …)` lines into this `ament_cmake` bringup package.
+
+### One-shot autoboot scripts (`autoboot.sh` / `autoboot_disable.sh`)
+
+Two repo-root bash scripts wrap "bring up the whole stack, wait until it's ACTIVE, then start patrolling" into a single fire-and-forget command, plus a matching teardown. They are for unattended startup (rc.local / systemd / "just run it") — they do **not** replace the manual two-terminal flow above, which is still better for interactive tuning.
+
+- [`autoboot.sh`](autoboot.sh): sources ROS + the overlay, launches `real_lidar_navigate.launch.py` **detached in its own process group** (`setsid`, so it survives the terminal), polls `ros2 lifecycle get` on `map_server, amcl, controller_server, planner_server, behavior_server, bt_navigator` until all report `active` (120 s timeout, aborts if the launch dies early), then starts `square_patrol.py` — also detached — and exits. PGIDs and logs live in `/tmp/sentry_autoboot/`. The two ROS commands live in an **`EDIT ME` block of `bash` arrays at the top** (`LAUNCH_CMD`, `PATROL_CMD`) — AutoX-`start`-style: to add a launch arg (`map:=…`, `use_keepout:=false`) just add/uncomment a line (one arg per line, no trailing backslashes). Both commands run through one `spawn_detached` helper that passes the argv array through verbatim, so args with `${VAR:-default}` substitutions survive intact. Set **`RUN_PATROL=false`** (or edit the flag in the block) to bring the stack up to ACTIVE but skip `square_patrol.py` — verifies the launch **without driving the robot**. Verified end-to-end on real hardware (ACTIVE in ~21 s, `/cmd_vel` at 10 Hz, clean teardown).
+- [`autoboot_disable.sh`](autoboot_disable.sh): reads the PGID files and tears down patrol first, then the launch, escalating `SIGINT → SIGTERM → SIGKILL` per **process group**; finishes with a `pkill -f` fallback sweep (`square_patrol.py`, `real_lidar_navigate.launch.py`, `nav2_`, `ldlidar`, `uart_odom`, `laserscan_toolbox`) for anything orphaned when the pidfiles are gone.
+
+```bash
+./autoboot.sh                       # headless (RViz off), MCU bridge off, then patrol
+USE_RVIZ=true ./autoboot.sh         # env-overridable: USE_RVIZ, USE_UART_ODOM,
+ENABLE_MCU_BRIDGE=true ./autoboot.sh #   ENABLE_MCU_BRIDGE, ACTIVE_TIMEOUT, RUN_PATROL
+RUN_PATROL=false ./autoboot.sh      # bring stack to ACTIVE but DON'T drive the robot
+./autoboot_disable.sh               # stop patrol + stack
+```
+
+**Design points / gotchas (don't reintroduce):**
+- **Defaults differ from the launch on one axis:** `use_rviz` defaults to `false` here (autoboot is headless) whereas the launch file defaults it to `true`. `use_uart_odom` (true) and `enable_mcu_bridge` (false) match the launch. All are env-overridable at the top of `autoboot.sh`.
+- **Everything runs under `setsid`** so `kill -<sig> -<PGID>` (negative PID = whole group) cleanly stops `ros2 launch` *and* all the child nodes it spawned. Killing just the recorded launch PID would orphan the nodes.
+- **The scripts hard-code `WS_ROOT=/home/orin/repos/nav2-sim-testing`** and `source /opt/ros/humble/setup.bash` + `install/setup.bash`. If the workspace moves or isn't built, `autoboot.sh` refuses to start (missing overlay check).
+- **`autoboot.sh` refuses to double-start** if a live launch PGID is already recorded — run `autoboot_disable.sh` first.
+- **The ROS `setup.bash` sourcing is wrapped in `set +u` / `set -u`.** `autoboot.sh` runs under `set -euo pipefail`, but ament's `setup.bash` references unbound vars (`AMENT_TRACE_SETUP_FILES`, …) and dies under `nounset` with `unbound variable`. Don't drop the `set +u` guard around the two `source` lines. (The inner `spawn_detached` `bash -c` re-sources ROS but has no `set -u`, so it needs no guard.)
+- **`autoboot_disable.sh`'s fallback `pkill -f` sweep is broad** — patterns like `nav2_` match *any* process whose full command line merely contains the string, including an unrelated shell running a `grep` that mentions it. It's a last-resort sweep for orphans after the per-PGID kill, so this is usually harmless, but don't rely on it as the primary teardown and be wary running it next to commands that echo those names.
+- Autoboot inherits the launch's default map (currently `maps/airbnb.yaml`, set in `real_lidar_navigate.launch.py`); to boot a different map, add a `map:=…` line to `LAUNCH_CMD` in the `EDIT ME` block. (The old `3v3_fields.yaml` plural-vs-singular mismatch is gone.)
+
+#### systemd service — start on boot + `systemctl status` (`install_service.sh` / `uninstall_service.sh`)
+
+For "is the stack up for the match?" checkability and start-on-boot/restart-on-crash, there's a real systemd unit `sentry_nav`, modeled on AutoX's `utils/setup_boot_script.sh` / `kill_onboot_cv`. It runs the **same** `autoboot.sh` (single source of truth for the editable command) with **`SERVICE_MODE=true`**.
+
+```bash
+./install_service.sh                    # install + enable + start (prompts for sudo)
+RUN_PATROL=false ./install_service.sh   # same, but bring up stack WITHOUT driving (safe verify)
+systemctl status sentry_nav             # <-- the "is the match running?" check
+systemctl is-active sentry_nav          # active / inactive, scriptable
+journalctl -u sentry_nav -f             # live logs (replaces /tmp/sentry_autoboot/*.log in service mode)
+sudo systemctl restart sentry_nav       # after editing args in autoboot.sh's EDIT ME block
+./uninstall_service.sh                  # stop + disable + remove
+```
+
+**How `SERVICE_MODE` differs from the plain `./autoboot.sh` run** (both in the one file):
+- **Foreground, not detached.** The launch + patrol run as `setsid` children but `autoboot.sh` **blocks** (`wait` on the launch) instead of exiting, so systemd can track the process (`Type=simple`), capture output in the journal, and `Restart=always` on crash. Plain mode still detaches and exits (fire-and-forget) as before.
+- **Teardown is a trap** (`cleanup_service` on EXIT/TERM/INT): on `systemctl stop`, systemd SIGTERMs the wrapper → the trap kills the child process groups **and** runs the same broad `pkill` sweep as `autoboot_disable.sh` (because `ros2 launch` reparents some nodes out of our group). systemd's own `KillMode=control-group` cgroup kill is the real backstop; the trap just keeps a *manual* `SERVICE_MODE=true` + Ctrl-C run from orphaning nodes. No pidfiles are written in service mode.
+
+**Install/verify gotchas (learned the hard way):**
+- **The unit bakes the options in as `Environment=` at install time** (`USE_RVIZ`, `USE_UART_ODOM`, `ENABLE_MCU_BRIDGE`, `RUN_PATROL`, `SERVICE_MODE=true`). To change the *map* or add a launch arg, edit `LAUNCH_CMD` in `autoboot.sh` and `systemctl restart`; to change one of the baked env knobs, re-run `install_service.sh` (optionally `RUN_PATROL=false ./install_service.sh`).
+- **`ros2 node list` lies during teardown checks** — it's served from the ros2 daemon's discovery cache and shows *dead* nodes for a while after they exit. To verify a teardown really happened, check **processes** (`ps`/`pgrep`) or `ros2 daemon stop && ros2 daemon start` before listing. This burned a debugging cycle (looked like the trap failed when the stack was already gone).
+- **`systemctl start` with the default `RUN_PATROL=true` drives the robot** (patrol starts as soon as the stack is ACTIVE). Verify the systemd wiring with `RUN_PATROL=false ./install_service.sh` first (stack comes up, no motion), then re-install with patrol on for the match.
+- Do **not** add `After=graphical.target` to the unit (same trap AutoX documents): it's ordered after `multi-user.target` (our `WantedBy`), creating an ordering cycle that makes systemd silently drop the boot start job.
+- Installing needs sudo (writes `/etc/systemd/system/sentry_nav.service`), so `install_service.sh` can't be run non-interactively without a passwordless sudo.
 
 ## Coordinate Frame Convention
 

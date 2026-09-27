@@ -10,12 +10,16 @@ amcl:
     # shows nothing until you click "2D Pose Estimate"). Adjust x/y/yaw to where
     # the robot actually starts relative to the map origin; yaw is the starting
     # heading in radians (0 = facing map +x).
+    # x: 10.4
+    #   y: 0.602
+    #   z: 0.0
+    #   yaw: 3.14159
     set_initial_pose: true
     initial_pose:
-      x: 0.0
-      y: 0.0
+      x: 11.0
+      y: -1.49
       z: 0.0
-      yaw: 0.0
+      yaw: 3.14159
     alpha1: 0.2
     alpha2: 0.2
     alpha3: 0.2
@@ -63,11 +67,33 @@ map_server:
     use_sim_time: false
     # yaml_filename is set at launch time via Node parameter override
 
+# Keepout zones (e.g. the ramp). filter_mask_server publishes the keepout mask
+# as an OccupancyGrid; costmap_filter_info_server publishes the metadata that
+# tells the KeepoutFilter (on the global costmap) how to interpret it.
+# type: 0 = keepout. base/multiplier map mask value -> cost: cost = base +
+# multiplier*mask, so mask=100 (black) -> cost 100 (lethal).
+costmap_filter_info_server:
+  ros__parameters:
+    use_sim_time: false
+    type: 0
+    filter_info_topic: "/costmap_filter_info"
+    mask_topic: "/keepout_filter_mask"
+    base: 0.0
+    multiplier: 1.0
+
+filter_mask_server:
+  ros__parameters:
+    use_sim_time: false
+    frame_id: "map"
+    topic_name: "/keepout_filter_mask"
+    # yaml_filename is set at launch time via Node parameter override
+    #   (keepout_mask.yaml) — same resolved-string-path gotcha as map_server.
+
 lifecycle_manager_localization:
   ros__parameters:
     use_sim_time: false
     autostart: true
-    node_names: ['map_server', 'amcl']
+    node_names: ['map_server', 'amcl', 'filter_mask_server', 'costmap_filter_info_server']
     bond_timeout: 4.0
     attempt_respawn_reconnection: true
     bond_respawn_max_duration: 60.0
@@ -96,7 +122,7 @@ controller_server:
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
       required_movement_radius: 0.5
-      movement_time_allowance: 10.0
+      movement_time_allowance: 60.0
 
     # Goal checker: position must be within 0.25 m, but yaw_goal_tolerance > pi
     # means ANY final heading counts as "arrived" — yaw is handled by the MCU.
@@ -111,21 +137,21 @@ controller_server:
       plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: True
       # Translational limits (both axes — robot can strafe). Max 0.5 m/s.
-      min_vel_x: -2.0
-      max_vel_x: 2.0
-      min_vel_y: -2.0
-      max_vel_y: 2.0
+      min_vel_x: -1.0
+      max_vel_x: 1.0
+      min_vel_y: -1.0
+      max_vel_y: 1.0
       min_speed_xy: 0.0
-      max_speed_xy: 2.0
+      max_speed_xy: 1.0
       # No rotation: omega is discarded downstream, so DWB evaluates pure
       # translation trajectories only.
       min_vel_theta: 0.0
       max_vel_theta: 0.0
-      acc_lim_x: 1.0
-      acc_lim_y: 1.0
+      acc_lim_x: 0.2
+      acc_lim_y: 0.2
       acc_lim_theta: 0.0
-      decel_lim_x: -1.0
-      decel_lim_y: -1.0
+      decel_lim_x: -0.3
+      decel_lim_y: -0.3
       decel_lim_theta: 0.0
       vx_samples: 20
       vy_samples: 20
@@ -177,7 +203,7 @@ local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 1.0
-        inflation_radius: 0.7
+        inflation_radius: 0.4
       always_send_full_costmap: True
 
 global_costmap:
@@ -192,9 +218,19 @@ global_costmap:
       robot_radius: 0.35
       track_unknown_space: true
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+      # Costmap filters run as a separate pipeline (after plugins), not in the
+      # plugins list. filters are applied after inflation.
+      filters: ["keepout_filter"]
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
+      # Keepout zones from keepout_mask.pgm (the ramp). Reads metadata from
+      # costmap_filter_info_server -> marks masked cells lethal so the planner
+      # routes around them even though the LiDAR sees open space there.
+      keepout_filter:
+        plugin: "nav2_costmap_2d::KeepoutFilter"
+        enabled: True
+        filter_info_topic: "/costmap_filter_info"
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
@@ -212,7 +248,7 @@ global_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.55
+        inflation_radius: 0.35
       always_send_full_costmap: True
 
 planner_server:
