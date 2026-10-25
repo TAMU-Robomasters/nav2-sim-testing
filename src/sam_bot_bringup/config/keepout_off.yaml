@@ -1,0 +1,16 @@
+# Overrides layered on top of nav2_params_real_lidar.yaml (for planner_server)
+# when real_lidar_navigate.launch.py is run with use_keepout:=false.
+#
+# The keepout filter is a plugin inside the global costmap (hosted by
+# planner_server), so it can't be toggled with a per-node parameter dict the way
+# node_names/yaml_filename can — it lives nested under
+# global_costmap.global_costmap.ros__parameters. This small file, passed as a
+# second params file *after* the main one, overrides just that one leaf so the
+# KeepoutFilter is disabled (inert, no "waiting for filter info" warnings) when
+# the two filter servers are not started. `filters` is left non-empty on purpose
+# — an empty `filters: []` list trips rclcpp's empty-array type inference.
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      keepout_filter:
+        enabled: false

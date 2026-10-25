@@ -311,7 +311,7 @@ def generate_launch_description():
     )
     declare_map = DeclareLaunchArgument(
         "map",
-        default_value=str(Path(bringup_share) / "maps" / "3v3_field.yaml"),
+        default_value=str(Path(bringup_share) / "maps" / "web_good_save.yaml"),
         description="Absolute path to the map YAML for map_server "
         "(default: maps/airbnb.yaml)",
     )
